@@ -4,6 +4,9 @@ const connectToDatabase = require('./db/database');
 const cors = require('cors');
 const authRoutes = require('./Routes/authRoutes');
 const albumRoutes = require('./Routes/albumRoutes');
+const reviewRoutes = require('./Routes/reviewRoutes')
+const { upload } = require('./middleware/multerConfig');
+
 const app = express();
 
 app.use(cors());
@@ -17,6 +20,9 @@ app.use('/api/auth', authRoutes);
 
 // Album routes
 app.use('/api/albums', albumRoutes);
+
+// Review routes
+app.use('/api/reviews', reviewRoutes);
 
 // Server listening
 const PORT = process.env.PORT || 5000;
