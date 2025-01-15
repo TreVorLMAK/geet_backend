@@ -123,4 +123,20 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+router.get('/album/:albumId', async (req, res) => {
+  try {
+    const albumId = req.params.albumId;
+    const album = await Album.findById(albumId).populate('reviews');
+
+    if (!album) {
+      return res.status(404).json({ message: 'Album not found' });
+    }
+
+    res.status(200).json({ reviews: album.reviews });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
 module.exports = router;
