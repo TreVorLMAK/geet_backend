@@ -126,6 +126,12 @@ router.put('/:id', authMiddleware, async (req, res) => {
 router.get('/album/:albumId', async (req, res) => {
   try {
     const albumId = req.params.albumId;
+
+    // Ensure albumId is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(albumId)) {
+      return res.status(400).json({ message: 'Invalid album ID format' });
+    }
+
     const album = await Album.findById(albumId).populate('reviews');
 
     if (!album) {
@@ -133,6 +139,24 @@ router.get('/album/:albumId', async (req, res) => {
     }
 
     res.status(200).json({ reviews: album.reviews });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+router.get('/user', authMiddleware, async (req, res) => {
+  try {
+    const userId = req.user.userId; // Extract the user ID from the token
+
+    // Fetch reviews for the logged-in user
+    const reviews = await Review.find({ createdBy: userId }).populate('album');
+    
+    if (reviews.length === 0) {
+      return res.status(404).json({ message: 'No reviews found' });
+    }
+
+    res.status(200).json({ reviews });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error', error: error.message });
