@@ -1,4 +1,5 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const Review = require('../model/reviewModel');
 const Album = require('../model/albumModel');
 const authMiddleware = require('../middleware/authMiddleware');
@@ -15,6 +16,11 @@ router.post('/', authMiddleware, async (req, res) => {
 
     if (!albumId || !rating || !comment) {
       return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    // Validate albumId format
+    if (!mongoose.Types.ObjectId.isValid(albumId)) {
+      return res.status(400).json({ message: 'Invalid album ID format' });
     }
 
     // Check if album exists
@@ -54,6 +60,11 @@ router.post('/', authMiddleware, async (req, res) => {
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const reviewId = req.params.id;
+
+    // Validate reviewId format
+    if (!mongoose.Types.ObjectId.isValid(reviewId)) {
+      return res.status(400).json({ message: 'Invalid review ID format' });
+    }
 
     // Find the review
     const review = await Review.findById(reviewId);
@@ -96,6 +107,11 @@ router.put('/:id', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Rating and comment are required' });
     }
 
+    // Validate reviewId format
+    if (!mongoose.Types.ObjectId.isValid(reviewId)) {
+      return res.status(400).json({ message: 'Invalid review ID format' });
+    }
+
     // Find the review
     const review = await Review.findById(reviewId);
 
@@ -123,6 +139,10 @@ router.put('/:id', authMiddleware, async (req, res) => {
   }
 });
 
+/**
+ * GET Reviews for a specific album
+ * GET /api/reviews/album/:albumId
+ */
 router.get('/album/:albumId', async (req, res) => {
   try {
     const albumId = req.params.albumId;
@@ -145,6 +165,10 @@ router.get('/album/:albumId', async (req, res) => {
   }
 });
 
+/**
+ * GET Reviews by a specific user
+ * GET /api/reviews/user
+ */
 router.get('/user', authMiddleware, async (req, res) => {
   try {
     const userId = req.user.userId; // Extract the user ID from the token

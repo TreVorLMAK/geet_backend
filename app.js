@@ -25,7 +25,6 @@ app.use('/api/albums', albumRoutes);
 // Review routes
 app.use('/api/reviews', reviewRoutes);
 
-
 // Artist routes
 app.use('/api/artists', artistRoutes);
 

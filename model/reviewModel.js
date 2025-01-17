@@ -18,7 +18,7 @@ const reviewSchema = new mongoose.Schema(
       ref: 'User', // Reference to the User model
       required: true,
     },
-    albumId: {
+    album: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Album', // Reference to the Album model
       required: true,

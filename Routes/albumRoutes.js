@@ -2,6 +2,7 @@ const express = require('express');
 const Album = require('../model/albumModel');
 const authMiddleware = require('../middleware/authMiddleware');
 const axios = require('axios');
+const mongoose = require('mongoose')
 
 const { upload, multerUpload } = require('../middleware/multerConfig');
 
@@ -30,6 +31,10 @@ router.post('/:id/review', authMiddleware, async (req, res) => {
   const { reviewText, rating } = req.body;
 
   const userId = req.user.id;
+
+  if (!mongoose.Types.ObjectId.isValid(albumId)) {
+    return res.status(400).json({ message: 'Invalid album ID' });
+  }
 
   if (rating < 0 || rating > 5) {
     return res.status(400).json({ message: 'Rating must be between 0 and 5' });
