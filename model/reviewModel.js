@@ -1,28 +1,11 @@
 const mongoose = require('mongoose');
 
-// Define the Review Schema
 const reviewSchema = new mongoose.Schema(
   {
-    content: {
-      type: String,
-      required: true,
-    },
-    rating: {
-      type: Number,
-      required: true,
-      min: 0,
-      max: 5,
-    },
-    createdBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User', // Reference to the User model
-      required: true,
-    },
-    album: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Album', // Reference to the Album model
-      required: true,
-    },
+    album: { type: mongoose.Schema.Types.ObjectId, ref: 'Album', required: true },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    reviewText: { type: String },
+    rating: { type: Number, min: 0, max: 5 },
   },
   { timestamps: true }
 );

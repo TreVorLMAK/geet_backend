@@ -5,7 +5,7 @@ require('dotenv').config();
 
 const router = express.Router();
 
-// Add a new artist by fetching details from the Last.fm API
+// Add a new artist
 router.post('/add', async (req, res) => {
   const { name, image, listeners, bio, mbid } = req.body;
 
@@ -13,23 +13,13 @@ router.post('/add', async (req, res) => {
     return res.status(400).json({ error: 'Artist name is required' });
   }
 
-  // Add a check for mbid if required
-  if (!mbid) {
-    return res.status(400).json({ error: 'Artist mbid is required' });
-  }
-
   try {
-    const existingArtist = await Artist.findOne({ mbid });
-    if (existingArtist) {
-      return res.status(400).json({ error: 'Artist with this mbid already exists' });
-    }
-
     const newArtist = new Artist({
       name,
       image: image || '',
       listeners: listeners || 0,
       bio: bio || 'Artist biography not available.',
-      mbid,
+      mbid: mbid || null, // Allow null mbid
     });
 
     await newArtist.save();
@@ -39,11 +29,10 @@ router.post('/add', async (req, res) => {
       artist: newArtist,
     });
   } catch (error) {
-    console.error('Error fetching or saving artist data:', error.message);
+    console.error('Error saving artist data:', error.message);
     res.status(500).json({ error: 'An unexpected error occurred' });
   }
 });
-
 
 // Fetch all artists
 router.get('/', async (req, res) => {
