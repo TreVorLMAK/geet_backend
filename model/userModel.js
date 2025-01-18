@@ -18,6 +18,20 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    reviewedAlbums: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Album',
+      },
+    ],
+    profilePicture: {
+      type: String,
+      default: 'default-profile-picture-url',
+    },
+    bio: {
+      type: String,
+      maxLength: 150,
+    },
   },
   { timestamps: true }
 );
@@ -40,5 +54,4 @@ userSchema.methods.generateAuthToken = function () {
 };
 
 const User = mongoose.model('User', userSchema);
-
 module.exports = User;

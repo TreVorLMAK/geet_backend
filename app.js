@@ -7,6 +7,7 @@ const albumRoutes = require('./Routes/albumRoutes');
 const reviewRoutes = require('./Routes/reviewRoutes')
 const { upload } = require('./middleware/multerConfig');
 const artistRoutes = require('./Routes/artistRoutes');
+const userRoutes = require('./Routes/userRoutes')
 
 const app = express();
 
@@ -27,6 +28,9 @@ app.use('/api/reviews', reviewRoutes);
 
 // Artist routes
 app.use('/api/artists', artistRoutes);
+
+// User routes
+app.use('/api/user', userRoutes);
 
 // Server listening
 const PORT = process.env.PORT || 5000;

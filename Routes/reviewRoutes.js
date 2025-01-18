@@ -171,19 +171,18 @@ router.get('/album/:albumId', async (req, res) => {
  */
 router.get('/user', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.userId; // Extract the user ID from the token
+    const userId = req.user.id; // Get the user ID from the token
 
-    // Fetch reviews for the logged-in user
-    const reviews = await Review.find({ createdBy: userId }).populate('album');
+    const reviews = await Review.find({ userId }).lean();
     
-    if (reviews.length === 0) {
-      return res.status(404).json({ message: 'No reviews found' });
+    if (!reviews || reviews.length === 0) {
+      return res.status(404).json({ message: 'No reviews found for this user' });
     }
 
-    res.status(200).json({ reviews });
+    res.status(200).json(reviews);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    console.error('Error fetching reviews:', error);
+    res.status(500).json({ message: 'Error fetching reviews' });
   }
 });
 

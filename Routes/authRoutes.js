@@ -41,6 +41,7 @@ router.post('/register', async (req, res) => {
       token,
     });
   } catch (error) {
+    console.error('Error during registration:', error);  // Error logging
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
@@ -48,7 +49,6 @@ router.post('/register', async (req, res) => {
 // User login route
 router.post('/login', async (req, res) => {
   try {
-    console.log(req.body); // Check incoming body
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
@@ -56,11 +56,13 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
+    // Compare the provided password with the hashed password in the DB
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password" });
     }
 
+    // Generate JWT token
     const token = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '6h' });
 
     res.status(200).json({
@@ -73,6 +75,7 @@ router.post('/login', async (req, res) => {
       token,
     });
   } catch (error) {
+    console.error('Error during login:', error);  // Error logging
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });

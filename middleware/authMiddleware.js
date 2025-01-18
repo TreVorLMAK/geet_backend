@@ -1,17 +1,38 @@
 const jwt = require('jsonwebtoken');
 
 const authMiddleware = (req, res, next) => {
-  const token = req.header('Authorization')?.replace('Bearer ', '');
-
-  if (!token) return res.status(401).json({ message: 'Unauthorized' });
-
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log(decoded); // Debugging line: check the decoded token
-    req.user = decoded; // Attach user info to the request
-    next();
+    
+    const authHeader = req.header('Authorization');
+    if (!authHeader) {
+      return res.status(401).json({ message: 'No authorization header found' });
+    }
+
+    const token = authHeader.startsWith('Bearer ') 
+      ? authHeader.replace('Bearer ', '')
+      : authHeader;
+
+    if (!token) {
+      return res.status(401).json({ message: 'No token provided' });
+    }
+
+    // Verify token with more specific error handling
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.user = decoded;
+      next();
+    } catch (error) {
+      if (error.name === 'TokenExpiredError') {
+        return res.status(401).json({ message: 'Token has expired' });
+      }
+      if (error.name === 'JsonWebTokenError') {
+        return res.status(401).json({ message: 'Invalid token' });
+      }
+      throw error;
+    }
   } catch (error) {
-    res.status(401).json({ message: 'Invalid or expired token' });
+    console.error('Auth Middleware Error:', error);
+    return res.status(500).json({ message: 'Internal server error during authentication' });
   }
 };
 
