@@ -56,39 +56,36 @@ router.post('/:id/review', authMiddleware, async (req, res) => {
   res.status(200).json({ message: 'Review added successfully' });
 });
 
-router.post('/add', authMiddleware, multerUpload.single('image'), async (req, res) => {
+router.get('/details/:artist/:album', async (req, res) => {
+  const artist = req.params.artist;
+  const album = req.params.album;
+  const apiKey = process.env.LASTFM_API_KEY;
+  const url = `http://ws.audioscrobbler.com/2.0/?method=album.getinfo&artist=${encodeURIComponent(artist)}&album=${encodeURIComponent(album)}&api_key=${apiKey}&format=json`;
+
   try {
-    const { title, artist, genre, releaseYear, description } = req.body;
-    const image = req.file ? req.file.path : null;
+    const response = await axios.get(url);
 
-    const createdBy = req.user && req.user.userId; // Using authenticated user ID
-
-    console.log(createdBy);
-
-    if (!title || !artist || !image || !genre || !releaseYear || !description) {
-      return res.status(400).json({ message: "Please fill all fields" });
+    // Handle error from Last.fm or if album details are missing
+    if (response.data.error || !response.data.album) {
+      return res.status(404).json({ message: response.data.message || 'Album not found.' });
     }
 
-    if (!createdBy) {
-      return res.status(401).json({ message: "Unauthorized: createdBy is required" });
-    }
+    // Extract album name, bio, track list, and cover art
+    const albumData = response.data.album;
+    const albumDetails = {
+      name: albumData.name,
+      bio: albumData.wiki ? albumData.wiki.content : 'No bio available',
+      tracks: albumData.tracks.track.map(track => ({
+        name: track.name,
+        url: track.url
+      })),
+      coverArt: albumData.image ? albumData.image[3]['#text'] : null,
+    };
 
-    await Album.create({
-      title,
-      artist,
-      genre,
-      releaseYear,
-      coverArt: image,
-      description,
-      createdBy,
-    });
-
-    res.status(200).json({
-      message: "Album created successfully",
-    });
+    // Send the extracted details as a response
+    res.status(200).json(albumDetails);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({ message: 'Failed to fetch album details', error: error.message });
   }
 });
 
