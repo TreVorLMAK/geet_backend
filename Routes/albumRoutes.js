@@ -70,9 +70,11 @@ router.get('/details/:artist/:album', async (req, res) => {
       return res.status(404).json({ message: response.data.message || 'Album not found.' });
     }
 
-    // Extract album name, bio, track list, and cover art
+    // Extract album details including ID, name, bio, track list, and cover art
     const albumData = response.data.album;
+    // console.log(albumData)
     const albumDetails = {
+      id: albumData.mbid,  
       name: albumData.name,
       bio: albumData.wiki ? albumData.wiki.content : 'No bio available',
       tracks: albumData.tracks.track.map(track => ({
@@ -88,6 +90,7 @@ router.get('/details/:artist/:album', async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch album details', error: error.message });
   }
 });
+
 
 
 module.exports = router;

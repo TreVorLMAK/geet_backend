@@ -1,8 +1,10 @@
+require('dotenv').config();  
 const express = require('express');
 const mongoose = require('mongoose');
 const Review = require('../model/reviewModel');
 const Album = require('../model/albumModel');
 const authMiddleware = require('../middleware/authMiddleware');
+const { ObjectId } = mongoose.Types;
 
 const router = express.Router();
 
@@ -12,37 +14,42 @@ const router = express.Router();
  */
 router.post('/', authMiddleware, async (req, res) => {
   try {
-    const { albumId, rating, comment } = req.body;
+    const { albumId, rating, reviewText } = req.body;
+    const userId = req.user.userId; // Get the user ID from the token
 
-    if (!albumId || !rating || !comment) {
+    console.log('Received:', { albumId, rating, reviewText, userId });
+
+    if (!albumId || !rating || !reviewText) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // Validate albumId format
-    if (!mongoose.Types.ObjectId.isValid(albumId)) {
-      return res.status(400).json({ message: 'Invalid album ID format' });
+    const fetch = await import('node-fetch').then(mod => mod.default);
+
+    // Fetch the album details from Last.fm API (using fetch)
+    const apiKey = process.env.LASTFM_API_KEY; // Fetch the API key from .env
+    const albumDetails = await fetch(`https://ws.audioscrobbler.com/2.0/?method=album.getinfo&api_key=${apiKey}&mbid=${albumId}&format=json`)
+      .then(response => response.json())
+      .catch(error => {
+        console.error('Error fetching album details:', error);
+        throw new Error('Error fetching album details');
+      });
+
+    // Check if the album exists on Last.fm
+    if (!albumDetails.album) {
+      return res.status(404).json({ message: 'Album not found on Last.fm' });
     }
 
-    // Check if album exists
-    const album = await Album.findById(albumId);
-    if (!album) {
-      return res.status(404).json({ message: 'Album not found' });
-    }
-
-    // Create a new review
+    // Create the review
     const newReview = new Review({
-      album: albumId,
+      album: albumId, // Directly use the UUID as a string
+      user: userId,
       rating,
-      comment,
-      createdBy: req.user.userId,
+      reviewText,
     });
 
     await newReview.save();
 
-    // Add the review to the album
-    album.reviews.push(newReview._id);
-    await album.save();
-
+    // Send the response
     res.status(201).json({
       message: 'Review added successfully',
       review: newReview,
@@ -60,27 +67,27 @@ router.post('/', authMiddleware, async (req, res) => {
 router.delete('/:id', authMiddleware, async (req, res) => {
   try {
     const reviewId = req.params.id;
+    const userId = req.user.userId;
 
     // Validate reviewId format
     if (!mongoose.Types.ObjectId.isValid(reviewId)) {
       return res.status(400).json({ message: 'Invalid review ID format' });
     }
 
-    // Find the review
     const review = await Review.findById(reviewId);
 
     if (!review) {
       return res.status(404).json({ message: 'Review not found' });
     }
 
-    // Check if the logged-in user created the review
-    if (review.createdBy.toString() !== req.user.userId) {
+    // Ensure the review was created by the logged-in user
+    if (review.user.toString() !== userId) {
       return res.status(403).json({ message: 'You can only delete your own reviews' });
     }
 
-    // Remove the review from the album
+    // Remove the review from the album's reviews array (no change needed here)
     await Album.updateOne(
-      { _id: review.album },
+      { albumId: review.album }, // Use albumId instead of ObjectId here
       { $pull: { reviews: review._id } }
     );
 
@@ -101,10 +108,11 @@ router.delete('/:id', authMiddleware, async (req, res) => {
 router.put('/:id', authMiddleware, async (req, res) => {
   try {
     const reviewId = req.params.id;
-    const { rating, comment } = req.body;
+    const { rating, reviewText } = req.body;
+    const userId = req.user.userId;
 
-    if (!rating || !comment) {
-      return res.status(400).json({ message: 'Rating and comment are required' });
+    if (!rating || !reviewText) {
+      return res.status(400).json({ message: 'Rating and reviewText are required' });
     }
 
     // Validate reviewId format
@@ -112,21 +120,20 @@ router.put('/:id', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Invalid review ID format' });
     }
 
-    // Find the review
     const review = await Review.findById(reviewId);
 
     if (!review) {
       return res.status(404).json({ message: 'Review not found' });
     }
 
-    // Check if the logged-in user created the review
-    if (review.createdBy.toString() !== req.user.userId) {
+    // Ensure the review was created by the logged-in user
+    if (review.user.toString() !== userId) {
       return res.status(403).json({ message: 'You can only edit your own reviews' });
     }
 
     // Update the review
     review.rating = rating;
-    review.comment = comment;
+    review.reviewText = reviewText;
     await review.save();
 
     res.status(200).json({
@@ -147,12 +154,12 @@ router.get('/album/:albumId', async (req, res) => {
   try {
     const albumId = req.params.albumId;
 
-    // Ensure albumId is a valid ObjectId
-    if (!mongoose.Types.ObjectId.isValid(albumId)) {
-      return res.status(400).json({ message: 'Invalid album ID format' });
+    if (!albumId) {
+      return res.status(400).json({ message: 'Album ID is required' });
     }
 
-    const album = await Album.findById(albumId).populate('reviews');
+    // Find the album using the UUID (as a string, no ObjectId conversion needed)
+    const album = await Album.findOne({ albumId }).populate('reviews');
 
     if (!album) {
       return res.status(404).json({ message: 'Album not found' });
@@ -171,10 +178,10 @@ router.get('/album/:albumId', async (req, res) => {
  */
 router.get('/user', authMiddleware, async (req, res) => {
   try {
-    const userId = req.user.id; // Get the user ID from the token
+    const userId = req.user.userId;
 
-    const reviews = await Review.find({ userId }).lean();
-    
+    const reviews = await Review.find({ user: userId }).lean();
+
     if (!reviews || reviews.length === 0) {
       return res.status(404).json({ message: 'No reviews found for this user' });
     }

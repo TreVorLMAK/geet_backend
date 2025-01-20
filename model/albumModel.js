@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 // Album Schema
 const albumSchema = new mongoose.Schema(
   {
+    mbid: { type: String, required: true, unique: true },
     title: { type: String, required: true },
     artist: { type: String, required: true },
     genre: { type: String, required: true },
