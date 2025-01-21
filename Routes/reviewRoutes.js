@@ -15,9 +15,7 @@ const router = express.Router();
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { albumId, rating, reviewText } = req.body;
-    const userId = req.user.userId; // Get the user ID from the token
-
-    console.log('Received:', { albumId, rating, reviewText, userId });
+    const userId = req.user.userId;
 
     if (!albumId || !rating || !reviewText) {
       return res.status(400).json({ message: 'All fields are required' });
@@ -25,8 +23,8 @@ router.post('/', authMiddleware, async (req, res) => {
 
     const fetch = await import('node-fetch').then(mod => mod.default);
 
-    // Fetch the album details from Last.fm API (using fetch)
-    const apiKey = process.env.LASTFM_API_KEY; // Fetch the API key from .env
+    // Fetch the album details from Last.fm API
+    const apiKey = process.env.LASTFM_API_KEY;
     const albumDetails = await fetch(`https://ws.audioscrobbler.com/2.0/?method=album.getinfo&api_key=${apiKey}&mbid=${albumId}&format=json`)
       .then(response => response.json())
       .catch(error => {
@@ -39,17 +37,21 @@ router.post('/', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Album not found on Last.fm' });
     }
 
+    const artistName = albumDetails.album.artist;
+    const albumName = albumDetails.album.name;
+
     // Create the review
     const newReview = new Review({
-      album: albumId, // Directly use the UUID as a string
+      album: albumId,
       user: userId,
       rating,
       reviewText,
+      artistName,
+      albumName
     });
 
     await newReview.save();
 
-    // Send the response
     res.status(201).json({
       message: 'Review added successfully',
       review: newReview,
@@ -84,12 +86,6 @@ router.delete('/:id', authMiddleware, async (req, res) => {
     if (review.user.toString() !== userId) {
       return res.status(403).json({ message: 'You can only delete your own reviews' });
     }
-
-    // Remove the review from the album's reviews array (no change needed here)
-    await Album.updateOne(
-      { albumId: review.album }, // Use albumId instead of ObjectId here
-      { $pull: { reviews: review._id } }
-    );
 
     // Delete the review
     await review.deleteOne();
@@ -148,24 +144,24 @@ router.put('/:id', authMiddleware, async (req, res) => {
 
 /**
  * GET Reviews for a specific album
- * GET /api/reviews/album/:albumId
+ * GET /api/reviews/album/:mbid
  */
-router.get('/album/:albumId', async (req, res) => {
+router.get('/album/:mbid', async (req, res) => {
   try {
-    const albumId = req.params.albumId;
+    const mbid = req.params.mbid;  // Use mbid here instead of albumId
 
-    if (!albumId) {
-      return res.status(400).json({ message: 'Album ID is required' });
+    if (!mbid) {
+      return res.status(400).json({ message: 'Album MBID is required' });
     }
 
-    // Find the album using the UUID (as a string, no ObjectId conversion needed)
-    const album = await Album.findOne({ albumId }).populate('reviews');
+    // Find reviews for the album by mbid (MusicBrainz ID)
+    const reviews = await Review.find({ album: mbid }).lean();
 
-    if (!album) {
-      return res.status(404).json({ message: 'Album not found' });
+    if (!reviews || reviews.length === 0) {
+      return res.status(404).json({ message: 'No reviews found for this album' });
     }
 
-    res.status(200).json({ reviews: album.reviews });
+    res.status(200).json({ reviews });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Server error', error: error.message });
