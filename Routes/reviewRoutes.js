@@ -15,39 +15,31 @@ const router = express.Router();
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { albumId, rating, reviewText } = req.body;
-    const userId = req.user.userId;
+    const { userId, username } = req.user; // Extract username from req.user
 
     if (!albumId || !rating || !reviewText) {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
     const fetch = await import('node-fetch').then(mod => mod.default);
-
-    // Fetch the album details from Last.fm API
     const apiKey = process.env.LASTFM_API_KEY;
-    const albumDetails = await fetch(`https://ws.audioscrobbler.com/2.0/?method=album.getinfo&api_key=${apiKey}&mbid=${albumId}&format=json`)
-      .then(response => response.json())
-      .catch(error => {
-        console.error('Error fetching album details:', error);
-        throw new Error('Error fetching album details');
-      });
 
-    // Check if the album exists on Last.fm
+    const albumDetails = await fetch(
+      `https://ws.audioscrobbler.com/2.0/?method=album.getinfo&api_key=${apiKey}&mbid=${albumId}&format=json`
+    ).then(response => response.json());
+
     if (!albumDetails.album) {
       return res.status(404).json({ message: 'Album not found on Last.fm' });
     }
 
-    const artistName = albumDetails.album.artist;
-    const albumName = albumDetails.album.name;
-
-    // Create the review
     const newReview = new Review({
       album: albumId,
       user: userId,
+      username, // Include username here
       rating,
       reviewText,
-      artistName,
-      albumName
+      artistName: albumDetails.album.artist,
+      albumName: albumDetails.album.name,
     });
 
     await newReview.save();
@@ -61,6 +53,7 @@ router.post('/', authMiddleware, async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });
+
 
 /**
  * DELETE Review API
