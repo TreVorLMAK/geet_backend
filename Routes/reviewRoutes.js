@@ -35,7 +35,7 @@ router.post('/', authMiddleware, async (req, res) => {
     const newReview = new Review({
       album: albumId,
       user: userId,
-      username, // Include username here
+      username, 
       rating,
       reviewText,
       artistName: albumDetails.album.artist,
