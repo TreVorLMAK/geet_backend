@@ -9,11 +9,13 @@ const { upload } = require('./middleware/multerConfig');
 const artistRoutes = require('./Routes/artistRoutes');
 const userRoutes = require('./Routes/userRoutes')
 const khaltiRoutes = require('./Routes/khaltiRoutes');
+const passport = require('./passport');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(passport.initialize());
 
 // Connect to Database
 connectToDatabase();
