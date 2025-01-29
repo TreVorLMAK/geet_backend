@@ -32,13 +32,26 @@ const userSchema = new mongoose.Schema(
       type: String,
       maxLength: 150,
     },
+    otp: {
+      type: String,
+    },
+    otpExpires: {
+      type: Date,
+    },
+    resetOtp: { // Add this field for password reset
+      type: String,
+    },
+    resetOtpExpires: { // Add this field for password reset expiration
+      type: Date,
+    },
   },
   { timestamps: true }
 );
 
-// Hash password before saving to the database
+
 userSchema.pre('save', async function (next) {
   if (!this.isModified('password')) return next();
+  console.log("Hashing password: ", this.password); // Log the password before hashing
   this.password = await bcrypt.hash(this.password, 10);
   next();
 });
@@ -50,7 +63,7 @@ userSchema.methods.matchPassword = async function (password) {
 
 // Generate JWT token
 userSchema.methods.generateAuthToken = function () {
-  return jwt.sign({ id: this._id, username: this.username }, process.env.JWT_SECRET, { expiresIn: '6h' });
+  return jwt.sign({ id: this._id, username: this.username }, process.env.JWT_SECRET, { expiresIn: '6d' });
 };
 
 const User = mongoose.model('User', userSchema);
