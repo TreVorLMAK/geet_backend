@@ -8,7 +8,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
   try {
     console.log("Authenticated User:", req.user); // Debugging
 
-    if (!req.user || !req.user.id) {
+    if (!req.user || !req.user.userId) {
       return res.status(401).json({ status: "error", message: "Unauthorized access" });
     }
 
