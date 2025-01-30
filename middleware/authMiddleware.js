@@ -8,7 +8,7 @@ const authMiddleware = (req, res, next) => {
     }
 
     const token = authHeader.startsWith('Bearer ') 
-      ? authHeader.replace('Bearer ', '')
+      ? authHeader.replace('Bearer ', '') 
       : authHeader;
 
     if (!token) {
@@ -17,7 +17,8 @@ const authMiddleware = (req, res, next) => {
 
     try {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = decoded; // This attaches the decoded JWT payload to the request
+      console.log('Decoded JWT:', decoded); 
+      req.user = { userId: decoded.id, username: decoded.username };
       next();
     } catch (error) {
       if (error.name === 'TokenExpiredError') {

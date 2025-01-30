@@ -16,7 +16,8 @@ const router = express.Router();
 router.post('/', authMiddleware, async (req, res) => {
   try {
     const { albumId, rating, reviewText } = req.body;
-    const { userId, username } = req.user; // Extract username from req.user
+    const { userId, username } = req.user; 
+    console.log('User:', req.user);
 
     if (!albumId || !rating || !reviewText) {
       return res.status(400).json({ message: 'All fields are required' });
