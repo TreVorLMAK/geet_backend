@@ -1,5 +1,4 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const User = require('../model/userModel');
 const jwt = require('jsonwebtoken');
 const passport = require('passport');
@@ -9,7 +8,6 @@ const crypto = require('crypto');
 
 const router = express.Router();
 
-// Email transporter configuration
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
@@ -18,36 +16,32 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// User registration route
-// User registration route
+const pendingRegistrations = new Map();
+
 router.post('/register', async (req, res) => {
   try {
     const { username, email, password, confirmPassword } = req.body;
 
-    // Check if passwords match
     if (password !== confirmPassword) {
       return res.status(400).json({ message: "Passwords do not match" });
     }
 
-    // Check if user already exists
     const existingUser = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
     if (existingUser) {
       return res.status(400).json({ message: "Email already in use" });
     }
 
-    // Generate OTP
     const otp = crypto.randomInt(100000, 999999).toString();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 min expiry
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
 
-    await User.create({
+    pendingRegistrations.set(email, {
       username,
       email,
-      password, 
+      password,
       otp,
-      otpExpires,
+      otpExpires
     });
 
-    // Send OTP via email
     const mailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
@@ -64,87 +58,43 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// User login route
-router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
-    if (!user) return res.status(400).json({ message: "Invalid email or password" });
-
-    // Compare the entered password with the hashed password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ message: "Invalid password" });
-
-    const token = jwt.sign({ userId: user._id, username: user.username }, process.env.JWT_SECRET, { expiresIn: '6d' });
-
-    res.status(200).json({ message: "Login successful", user: { _id: user._id, username: user.username, email: user.email }, token });
-  } catch (error) {
-    console.error('Error during login:', error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-});
-
-
-// Send OTP for registration
-router.post('/send-otp', async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    const existingUser = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
-    if (existingUser) return res.status(400).json({ message: "Email already in use" });
-
-    const otp = crypto.randomInt(100000, 999999).toString();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
-
-    await User.findOneAndUpdate({ email }, { email, otp, otpExpires }, { upsert: true, new: true });
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Your OTP for Registration",
-      text: `Your OTP is ${otp}. It expires in 5 minutes.`,
-    });
-
-    res.status(200).json({ message: "OTP sent successfully", email });
-  } catch (error) {
-    console.error("Error sending OTP:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-});
-
-// Verify OTP & complete registration
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    // Find user
-    const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
-    if (!user) {
-      return res.status(400).json({ message: "User not found" });
+    const pendingUser = pendingRegistrations.get(email);
+    
+    if (!pendingUser) {
+      return res.status(400).json({ message: "No pending registration found" });
     }
 
-    // Check OTP
-    if (user.otp !== otp || new Date() > user.otpExpires) {
-      return res.status(400).json({ message: "Invalid or expired OTP" });
+    if (pendingUser.otp !== otp) {
+      return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    // Clear OTP after use
-    user.otp = undefined;
-    user.otpExpires = undefined;
-    await user.save();
+    if (new Date() > pendingUser.otpExpires) {
+      pendingRegistrations.delete(email);
+      return res.status(400).json({ message: "OTP expired" });
+    }
 
-    // Generate JWT
+    const user = await User.create({
+      username: pendingUser.username,
+      email: pendingUser.email,
+      password: pendingUser.password
+    });
+
+    pendingRegistrations.delete(email);
+
     const token = user.generateAuthToken();
 
-    res.status(200).json({
-      message: "OTP verification successful",
+    res.status(201).json({
+      message: "Registration successful",
       user: {
         _id: user._id,
         username: user.username,
-        email: user.email,
+        email: user.email
       },
-      token,
+      token
     });
   } catch (error) {
     console.error("Error verifying OTP:", error);
@@ -152,8 +102,65 @@ router.post('/verify-otp', async (req, res) => {
   }
 });
 
+router.post('/resend-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
 
-// Send OTP for password reset
+    const pendingUser = pendingRegistrations.get(email);
+    if (!pendingUser) {
+      return res.status(400).json({ message: "No pending registration found" });
+    }
+
+    const otp = crypto.randomInt(100000, 999999).toString();
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
+
+    pendingUser.otp = otp;
+    pendingUser.otpExpires = otpExpires;
+    pendingRegistrations.set(email, pendingUser);
+
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Your New OTP for Registration",
+      text: `Your new OTP is ${otp}. It expires in 5 minutes.`,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    res.status(200).json({ message: "New OTP sent successfully", email });
+  } catch (error) {
+    console.error("Error resending OTP:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
+    if (!user) return res.status(400).json({ message: "Invalid email or password" });
+
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) return res.status(400).json({ message: "Invalid email or password" });
+
+    const token = user.generateAuthToken();
+
+    res.status(200).json({
+      message: "Login successful",
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email
+      },
+      token
+    });
+  } catch (error) {
+    console.error('Error during login:', error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
+
 router.post('/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -161,69 +168,74 @@ router.post('/forgot-password', async (req, res) => {
     const user = await User.findOne({ email: new RegExp(`^${email}$`, 'i') });
     if (!user) return res.status(400).json({ message: "User not found" });
 
-    // Generate OTP for password reset
     const otp = crypto.randomInt(100000, 999999).toString();
-    const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // OTP expires in 5 minutes
+    const otpExpires = new Date(Date.now() + 5 * 60 * 1000);
 
     user.resetOtp = otp;
     user.resetOtpExpires = otpExpires;
     await user.save();
 
-    await transporter.sendMail({
+    const mailOptions = {
       from: process.env.EMAIL_USER,
       to: email,
       subject: "Your OTP for Password Reset",
       text: `Your OTP is ${otp}. It expires in 5 minutes.`,
-    });
+    };
+
+    await transporter.sendMail(mailOptions);
 
     res.status(200).json({ message: "OTP sent successfully", email });
   } catch (error) {
-    console.error("Error sending OTP:", error);
+    console.error("Error sending reset OTP:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
 router.post("/reset-password", async (req, res) => {
-  const { email, otp, newPassword } = req.body; // Expecting newPassword here
-
-  if (!newPassword) {
-    return res.status(400).json({ message: "New password is required." });
-  }
-
   try {
-    // Find user by email
-    const user = await User.findOne({ email });
-    if (!user) return res.status(400).json({ message: "User not found." });
+    const { email, otp, newPassword } = req.body;
 
-    // Check if OTP is valid for password reset
-    if (!user.resetOtp || Date.now() > user.resetOtpExpires || user.resetOtp !== otp) {
-      return res.status(400).json({ message: "OTP expired or invalid." });
+    if (!newPassword) {
+      return res.status(400).json({ message: "New password is required" });
     }
 
-    // Hash the new password
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const user = await User.findOne({ email });
+    if (!user) return res.status(400).json({ message: "User not found" });
 
-    // Update the user's password
-    user.password = hashedPassword;
-    user.resetOtp = null; // Clear the reset OTP
-    user.resetOtpExpires = null; // Clear OTP expiration time
+    if (!user.resetOtp || new Date() > user.resetOtpExpires || user.resetOtp !== otp) {
+      return res.status(400).json({ message: "Invalid or expired OTP" });
+    }
+
+    user.password = newPassword;
+    user.resetOtp = undefined;
+    user.resetOtpExpires = undefined;
     await user.save();
 
-    res.status(200).json({ message: "Password reset successfully." });
+    res.status(200).json({ message: "Password reset successfully" });
   } catch (error) {
     console.error("Error resetting password:", error);
-    res.status(500).json({ message: "Something went wrong." });
+    res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-
-// Google OAuth login
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 router.get('/google/callback', passport.authenticate('google', { session: false }), (req, res) => {
-  const token = jwt.sign({ userId: req.user._id, username: req.user.username }, process.env.JWT_SECRET, { expiresIn: '6d' });
+  const token = jwt.sign(
+    { userId: req.user._id, username: req.user.username },
+    process.env.JWT_SECRET,
+    { expiresIn: '6d' }
+  );
 
-  res.status(200).json({ message: "Google login successful", user: { _id: req.user._id, username: req.user.username, email: req.user.email }, token });
+  res.status(200).json({
+    message: "Google login successful",
+    user: {
+      _id: req.user._id,
+      username: req.user.username,
+      email: req.user.email
+    },
+    token
+  });
 });
 
 module.exports = router;

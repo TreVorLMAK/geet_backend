@@ -6,40 +6,31 @@ const router = express.Router();
 
 router.get('/profile', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.user.userId)
-      .select('-password')
-      .lean();
+    console.log("Authenticated User:", req.user); // Debugging
 
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ status: "error", message: "Unauthorized access" });
+    }
+
+    const user = await User.findById(req.user.id).select("-password").lean();
     if (!user) {
-      return res.status(404).json({ 
-        status: 'error',
-        message: 'User not found' 
-      });
+      return res.status(404).json({ status: "error", message: "User not found" });
     }
 
     res.json({
-      status: 'success',
+      status: "success",
       data: {
         id: user._id,
         username: user.username,
         email: user.email,
         profilePicture: user.profilePicture || null,
-        bio: user.bio || '',
+        bio: user.bio || "",
         reviewedAlbums: user.reviewedAlbums || [],
-      }
+      },
     });
   } catch (error) {
-    console.error('Profile Route Error:', error);
-    if (error.name === 'CastError') {
-      return res.status(400).json({ 
-        status: 'error',
-        message: 'Invalid user ID format' 
-      });
-    }
-    res.status(500).json({ 
-      status: 'error',
-      message: 'Error fetching user profile' 
-    });
+    console.error("Profile Route Error:", error);
+    res.status(500).json({ status: "error", message: "Error fetching user profile" });
   }
 });
 
@@ -78,7 +69,7 @@ router.get('/:username', async (req, res) => {
 
 router.put('/update-bio', authMiddleware, async (req, res) => {
   const { bio } = req.body;
-  const userId = req.user.userId;
+  const userId = req.user.id; // Ensure you're accessing `id` properly here
 
   try {
     const user = await User.findById(userId);
